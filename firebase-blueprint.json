@@ -1,0 +1,201 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile and operational account state",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Unique user identifier"
+        },
+        "fullName": {
+          "type": "string",
+          "description": "User's full name"
+        },
+        "authType": {
+          "type": "string",
+          "description": "Authentication method: phone, email, or demo"
+        },
+        "identifier": {
+          "type": "string",
+          "description": "Primary login identifier"
+        },
+        "phone": {
+          "type": "string",
+          "description": "Phone number"
+        },
+        "email": {
+          "type": "string",
+          "description": "Email address"
+        },
+        "isVerified": {
+          "type": "boolean",
+          "description": "Verification status flag"
+        },
+        "station": {
+          "type": "string",
+          "description": "Assigned station name"
+        },
+        "stationId": {
+          "type": "string",
+          "description": "Unique station identifier"
+        },
+        "stationCode": {
+          "type": "string",
+          "description": "Station SOC code"
+        },
+        "companyId": {
+          "type": "string",
+          "description": "Operating company identifier"
+        },
+        "companyName": {
+          "type": "string",
+          "description": "Operating company name"
+        },
+        "supervisor": {
+          "type": "string",
+          "description": "Assigned supervisor name"
+        },
+        "role": {
+          "type": "string",
+          "description": "Assigned user role"
+        },
+        "staffId": {
+          "type": "string",
+          "description": "Official company staff ID"
+        },
+        "dutyStatus": {
+          "type": "string",
+          "description": "Active operational duty status"
+        },
+        "attendanceRate": {
+          "type": "string",
+          "description": "Historical shift attendance rate"
+        },
+        "lastLoginAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of most recent authentication"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Timestamp of last profile update"
+        }
+      },
+      "required": ["id", "fullName", "role"]
+    },
+    "Station": {
+      "title": "Station",
+      "description": "Fuel station branch configuration and profile",
+      "type": "object",
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Station identifier"
+        },
+        "name": {
+          "type": "string",
+          "description": "Station facility name"
+        },
+        "code": {
+          "type": "string",
+          "description": "Unique station code"
+        },
+        "location": {
+          "type": "string",
+          "description": "Physical branch location"
+        },
+        "updatedAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "Last updated timestamp"
+        }
+      },
+      "required": ["id", "name", "code"]
+    },
+    "StationJoinRequest": {
+      "title": "StationJoinRequest",
+      "description": "Station joining request submitted by an attendant for supervisor review",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "attendantName": { "type": "string" },
+        "attendantIdentifier": { "type": "string" },
+        "attendantPhone": { "type": "string" },
+        "attendantEmail": { "type": "string" },
+        "staffId": { "type": "string" },
+        "stationId": { "type": "string" },
+        "stationName": { "type": "string" },
+        "stationCode": { "type": "string" },
+        "companyName": { "type": "string" },
+        "status": { "type": "string", "enum": ["pending", "approved", "rejected"] },
+        "requestDate": { "type": "string", "format": "date-time" },
+        "notes": { "type": "string" },
+        "reviewedBy": { "type": "string" },
+        "reviewedAt": { "type": "string", "format": "date-time" },
+        "rejectionReason": { "type": "string" }
+      },
+      "required": ["id", "userId", "attendantName", "stationName", "status", "requestDate"]
+    },
+    "ShiftRecord": {
+      "title": "ShiftRecord",
+      "description": "Daily forecourt shift sales record including fuel pump readings, credit, evalue, and cash analysis",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "description": "Unique record identifier" },
+        "date": { "type": "string", "description": "Shift operational date" },
+        "shiftGroup": { "type": "string", "description": "Assigned shift group (A, B, etc.)" },
+        "shiftPeriod": { "type": "string", "description": "Day or Night shift" },
+        "attendant": { "type": "string", "description": "Attendant name" },
+        "station": { "type": "string", "description": "Station name" },
+        "supervisor": { "type": "string", "description": "Supervisor name" },
+        "notes": { "type": "string", "description": "Shift comments and remarks" },
+        "fuels": { "type": "object", "description": "Fuel meter readings by product type" },
+        "stocks": { "type": "object", "description": "Tank dips and deliveries" },
+        "approved": { "type": "array", "description": "Credit sales approved list" },
+        "evalue": { "type": "array", "description": "Electronic payments and drawings" },
+        "collections": { "type": "array", "description": "Credit sales collections" },
+        "generator": { "type": "array", "description": "Generator fuel and station expenses" },
+        "cash": { "type": "object", "description": "Physical currency denomination breakdown" },
+        "status": { "type": "string", "enum": ["draft", "submitted", "verified"], "description": "Shift status" },
+        "attendantSignature": { "type": "string", "description": "Attendant signature data" },
+        "supervisorSignature": { "type": "string", "description": "Supervisor sign-off signature" },
+        "verifiedBy": { "type": "string", "description": "Name of verifying supervisor" },
+        "verifiedAt": { "type": "string", "format": "date-time", "description": "Timestamp of supervisor verification" },
+        "revisionOf": { "type": "string", "description": "ID of parent record if this is a revision" },
+        "submittedAt": { "type": "string", "format": "date-time", "description": "Timestamp when shift was submitted" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Creation timestamp" }
+      },
+      "required": ["id", "date", "shiftGroup", "shiftPeriod", "attendant", "station", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": "User",
+      "description": "Collection of station personnel profiles and permissions"
+    },
+    "/stations/{stationId}": {
+      "schema": "Station",
+      "description": "Station branch details and forecourt configurations"
+    },
+    "/station_join_requests/{requestId}": {
+      "schema": "StationJoinRequest",
+      "description": "Pending and reviewed station join requests from attendants"
+    },
+    "/shift_records/{recordId}": {
+      "schema": "ShiftRecord",
+      "description": "Daily shift sales records saved to Firestore"
+    },
+    "/supervisor_sales/{docId}": {
+      "schema": "ShiftRecord",
+      "description": "Supervisor sales account records and shift handovers"
+    },
+    "/attendant_accountability/{docId}": {
+      "schema": "ShiftRecord",
+      "description": "Attendant accountability pump and payment records"
+    }
+  }
+}

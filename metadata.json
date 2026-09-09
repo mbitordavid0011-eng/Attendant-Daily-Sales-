@@ -1,0 +1,7 @@
+{
+  "name": "Daily Sales Record",
+  "description": "Ghana comprehensive fuel station daily sales recording, supervisor sales account, multi-day attendant accountability ledger, multi-brand lubricant catalog across all Ghana OMCs, and station reconciliation suite.",
+  "requestFramePermissions": ["geolocation"],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

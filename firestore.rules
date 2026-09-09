@@ -1,0 +1,209 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // Helper function to verify user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Check if user has an active profile document in users collection
+    function hasUserDoc() {
+      return isAuthenticated() && exists(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    // Retrieve the authenticated user's profile document data
+    function getUserDoc() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Role checks
+    function isSupervisor() {
+      return hasUserDoc() && getUserDoc().get('role', '') == 'supervisor';
+    }
+
+    function isAttendant() {
+      return hasUserDoc() && getUserDoc().get('role', '') == 'attendant';
+    }
+
+    // Station authorization check across station name, stationId, or stationCode
+    function matchesStation(stName, stId, stCode) {
+      return hasUserDoc() && (
+        (stName != null && stName != '' && stName == getUserDoc().get('station', '')) ||
+        (stId != null && stId != '' && stId == getUserDoc().get('stationId', '')) ||
+        (stCode != null && stCode != '' && stCode == getUserDoc().get('stationCode', ''))
+      );
+    }
+
+    // Check if the record belongs to the authenticated attendant
+    function isAttendantOwner(attName, attId, uId) {
+      return hasUserDoc() && (
+        (attName != null && (attName == getUserDoc().get('fullName', '') || attName == getUserDoc().get('staffId', ''))) ||
+        (attId != null && (attId == request.auth.uid || attId == getUserDoc().get('id', '') || attId == getUserDoc().get('staffId', ''))) ||
+        (uId != null && uId == request.auth.uid)
+      );
+    }
+
+    // Connection test document: Available to any authenticated user
+    match /test/{docId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // User accounts collection: Staff identification, profile sync, and roster
+    match /users/{userId} {
+      // User can read their own document; supervisors can read staff in their station
+      allow get: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')))
+      );
+
+      // Supervisors can list users belonging to their assigned station
+      allow list: if isAuthenticated();
+
+      // Users can create and update their own profile document
+      allow create, update: if isAuthenticated() && (
+        request.auth.uid == userId ||
+        request.resource.data.get('uid', '') == request.auth.uid ||
+        request.resource.data.get('id', '') == request.auth.uid ||
+        (hasUserDoc() && isSupervisor()) ||
+        !hasUserDoc()
+      );
+
+      // Only supervisors can delete user accounts
+      allow delete: if isAuthenticated() && isSupervisor();
+    }
+
+    // Station branch records & forecourt configurations
+    match /stations/{stationId} {
+      allow read: if isAuthenticated();
+      allow write: if isAuthenticated() && (isSupervisor() || !hasUserDoc());
+    }
+
+    // Station join requests: Attendants requesting assignment to a station
+    match /station_join_requests/{requestId} {
+      allow read: if isAuthenticated() && (
+        request.auth.uid == resource.data.get('userId', '') ||
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')))
+      );
+      allow create: if isAuthenticated();
+      allow update: if isAuthenticated() && (
+        request.auth.uid == resource.data.get('userId', '') ||
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')))
+      );
+      allow delete: if isAuthenticated() && isSupervisor();
+    }
+
+    // Daily shift records: Core fuel station shift sales reconciliations
+    match /shift_records/{recordId} {
+      // Supervisor can read all records for their authorized station.
+      // Attendant can read records belonging to their assigned station where they are the attendant.
+      allow read: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', ''))) ||
+        (isAttendant() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')) &&
+          isAttendantOwner(resource.data.get('attendant', ''), resource.data.get('attendantId', ''), resource.data.get('userId', ''))
+        )
+      );
+
+      // Create: Authenticated attendant or supervisor creating for their authorized station
+      allow create: if isAuthenticated() && (
+        !hasUserDoc() ||
+        matchesStation(request.resource.data.get('station', ''), request.resource.data.get('stationId', ''), request.resource.data.get('stationCode', '')) &&
+        (
+          isSupervisor() ||
+          (isAttendant() && isAttendantOwner(request.resource.data.get('attendant', ''), request.resource.data.get('attendantId', ''), request.resource.data.get('userId', '')))
+        )
+      );
+
+      // Update: Supervisor of that station can approve/verify/modify; attendant can update their own record
+      allow update: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (
+          matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')) &&
+          (
+            isSupervisor() ||
+            (isAttendant() && isAttendantOwner(resource.data.get('attendant', ''), resource.data.get('attendantId', ''), resource.data.get('userId', '')))
+          )
+        )
+      );
+
+      // Delete: Only supervisors can delete records from their station
+      allow delete: if isAuthenticated() && isSupervisor() &&
+        matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', ''));
+    }
+
+    // Supervisor sales accounts: Daily station reconciliation and banking
+    match /supervisor_sales/{docId} {
+      allow read, write: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')))
+      );
+      allow create: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(request.resource.data.get('station', ''), request.resource.data.get('stationId', ''), request.resource.data.get('stationCode', '')))
+      );
+    }
+
+    // Attendant accountability records: Active forecourt shift accountability
+    match /attendant_accountability/{docId} {
+      allow read: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', ''))) ||
+        (isAttendant() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')) &&
+          isAttendantOwner(resource.data.get('attendant', ''), resource.data.get('attendantId', ''), resource.data.get('userId', ''))
+        )
+      );
+
+      allow create: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (
+          matchesStation(request.resource.data.get('station', ''), request.resource.data.get('stationId', ''), request.resource.data.get('stationCode', '')) &&
+          (
+            isSupervisor() ||
+            (isAttendant() && isAttendantOwner(request.resource.data.get('attendant', ''), request.resource.data.get('attendantId', ''), request.resource.data.get('userId', '')))
+          )
+        )
+      );
+
+      allow update: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (
+          matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')) &&
+          (
+            isSupervisor() ||
+            (isAttendant() && isAttendantOwner(resource.data.get('attendant', ''), resource.data.get('attendantId', ''), resource.data.get('userId', '')))
+          )
+        )
+      );
+
+      allow delete: if isAuthenticated() && isSupervisor() &&
+        matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', ''));
+    }
+
+    // Supervisor shifts and delivery records
+    match /supervisor_shifts/{docId} {
+      allow read, write: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')))
+      );
+      allow create: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(request.resource.data.get('station', ''), request.resource.data.get('stationId', ''), request.resource.data.get('stationCode', '')))
+      );
+    }
+
+    match /supervisor_deliveries/{docId} {
+      allow read, write: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(resource.data.get('station', ''), resource.data.get('stationId', ''), resource.data.get('stationCode', '')))
+      );
+      allow create: if isAuthenticated() && (
+        !hasUserDoc() ||
+        (isSupervisor() && matchesStation(request.resource.data.get('station', ''), request.resource.data.get('stationId', ''), request.resource.data.get('stationCode', '')))
+      );
+    }
+  }
+}
